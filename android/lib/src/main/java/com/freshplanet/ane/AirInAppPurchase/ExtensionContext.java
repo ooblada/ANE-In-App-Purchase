@@ -312,6 +312,32 @@ public class ExtensionContext extends FREContext {
         }
     };
 
+    private FREFunction fetchOwnedProducts = new BaseFunction() {
+        @Override
+        public FREObject call(FREContext ctx, FREObject[] args) {
+            // Launch a new detection by fetching any new own inventory entry but do not dispatch any event
+            try {
+                _iabHelper.queryInventoryAsync(null);
+            }
+            catch (IabHelper.IabAsyncInProgressException exception) {
+                _dispatchEvent(RESTORE_INFO_ERROR, exception.getMessage());
+            }
+
+            return null;
+        }
+    };
+
+    private FREFunction restoreWithStalledTransactionCheck = new BaseFunction() {
+        @Override
+        public FREObject call(FREContext ctx, FREObject[] args) {
+            // Retry previously detected stalled transactions
+            if(_iabHelper != null) {
+                _iabHelper.retryStalledTransaction(_onIabPurchaseFinishedListener);
+            }
+            return null;
+        }
+    };
+
     private FREFunction removePurchaseFromQueue = new BaseFunction() {
         @Override
         public FREObject call(FREContext ctx, FREObject[] args) {
@@ -391,6 +417,8 @@ public class ExtensionContext extends FREContext {
         functionMap.put("makePurchase", makePurchase);
         functionMap.put("makeSubscription", makeSubscription);
         functionMap.put("restoreTransaction", restoreTransaction);
+        functionMap.put("fetchOwnedProducts", fetchOwnedProducts);
+        functionMap.put("restoreWithStalledTransactionCheck", restoreWithStalledTransactionCheck);
         functionMap.put("removePurchaseFromQueue", removePurchaseFromQueue);
 
         return functionMap;

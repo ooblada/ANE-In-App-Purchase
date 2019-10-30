@@ -120,6 +120,9 @@ public class IabHelper {
     // Public key for verifying signature, in base64 encoding
     String mSignatureBase64 = null;
 
+    // Purchases in an unspecified state that requires more processing
+    ArrayList<Purchase> mStalledPurchases = new ArrayList<Purchase>();
+
     // Billing response codes
     public static final int BILLING_RESPONSE_RESULT_OK = 0;
     public static final int BILLING_RESPONSE_RESULT_USER_CANCELED = 1;
@@ -600,6 +603,31 @@ public class IabHelper {
         return true;
     }
 
+    public void retryStalledTransaction(OnIabPurchaseFinishedListener listener) {
+        checkNotDisposed();
+        checkSetupDone("retryStalledTransaction");
+
+        if (mStalledPurchases != null) {
+            logDebug("Retry stalled transactions - " + mStalledPurchases.size());
+            for(Purchase p : mStalledPurchases) {
+                if (listener != null) {
+                    if((p.getSku().equals("no_ads_1") || p.getSku().equals("no_ad_1")) && mStalledPurchases.size() > 1) {
+                        logDebug("Skipping " + p.getSku() + " as its priority is lower than other products");
+                        continue;
+                    }
+                    else {
+                        logDebug("Retry with: " + p.getSku());
+                        listener.onIabPurchaseFinished(new IabResult(BILLING_RESPONSE_RESULT_OK, "Success"), p);
+                        break;  // We do not want to dispatch more than one event per call
+                    }
+                }
+                else {
+                    logDebug("Aborting retry stalled transaction: listener is null");
+                }
+            }
+        }
+    }
+
     public Inventory queryInventory() throws IabException {
         return queryInventory(false, null, null);
     }
@@ -777,6 +805,15 @@ public class IabHelper {
             int response = mService.consumePurchase(3, mContext.getPackageName(), token);
             if (response == BILLING_RESPONSE_RESULT_OK) {
                 logDebug("Successfully consumed sku: " + sku);
+                if(mStalledPurchases != null) {
+                    for(Purchase p : mStalledPurchases) {
+                        if (p.getSku().equals(sku)) {
+                            logDebug("sku is no more stalled: " + sku);
+                            mStalledPurchases.remove(p);
+                            break;
+                        }
+                    }
+                }
             }
             else {
                 logDebug("Error consuming consuming sku " + sku + ". " + getResponseDesc(response));
@@ -1001,6 +1038,23 @@ public class IabHelper {
                 if (Security.verifyPurchase(mSignatureBase64, purchaseData, signature)) {
                     logDebug("Sku is owned: " + sku);
                     Purchase purchase = new Purchase(itemType, purchaseData, signature);
+                    logDebug("Parsed purchase: " + purchase);
+
+                    if(purchase.getPurchaseState() == 0) {
+                        Boolean alreadyContainsPurchase = false;
+                        for(Purchase p :mStalledPurchases) {
+                            if(purchase.getSku().equals(p.getSku())) {
+                                alreadyContainsPurchase = true;
+                            }
+                        }
+                        if (alreadyContainsPurchase) {
+                            logDebug("Sku already registered as stalled purchase: " + purchase.getSku());
+                        }
+                        else {
+                            logDebug("Adding stalled product: " + purchase.getSku());
+                            mStalledPurchases.add(purchase);
+                        }
+                    }
 
                     if (TextUtils.isEmpty(purchase.getToken())) {
                         logWarn("BUG: empty/null token!");

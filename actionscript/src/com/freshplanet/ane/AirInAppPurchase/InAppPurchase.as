@@ -161,6 +161,36 @@ package com.freshplanet.ane.AirInAppPurchase {
             }
         }
 
+        /**
+         * RESTORE_INFO_RECEIVED
+         * RESTORE_INFO_ERROR
+         */
+        public function restoreWithStalledTransactionCheck():void {
+
+            if (!isSupported)
+                _dispatchEvent(InAppPurchaseEvent.RESTORE_INFO_ERROR, "InAppPurchase not supported");
+            else if (_isAndroid())
+                _context.call("restoreWithStalledTransactionCheck");
+            else if (_isIOS()) {
+
+                var jsonPurchases:String = "[" + _iosPendingPurchases.join(",") + "]";
+                var jsonData:String = "{ \"purchases\": " + jsonPurchases + "}";
+
+                _dispatchEvent(InAppPurchaseEvent.RESTORE_INFO_RECEIVED, jsonData);
+            }
+        }
+
+        /**
+         * RESTORE_INFO_ERROR
+         */
+        public function fetchOwnedProducts():void {
+
+            if (!isSupported)
+                _dispatchEvent(InAppPurchaseEvent.RESTORE_INFO_ERROR, "InAppPurchase not supported");
+            else if (_isAndroid())
+                _context.call("fetchOwnedProducts");
+        }
+
         // --------------------------------------------------------------------------------------//
         //																						 //
         // 									 	PRIVATE API										 //
