@@ -37,6 +37,10 @@
 }
 
 - (void) sendEvent:(NSString*)code level:(NSString*)level {
+    if(!level)
+        level = @"Null string detected";
+    else if (level.length == 0)
+        level = @"Zero length string detected";
     FREDispatchStatusEventAsync(_context, (const uint8_t*)[code UTF8String], (const uint8_t*)[level UTF8String]);
 }
 
@@ -100,8 +104,12 @@
     
     NSMutableDictionary *dictionary = [[NSMutableDictionary alloc] init];
     NSMutableDictionary *productElement = [[NSMutableDictionary alloc] init];
-    
+    if(!_products) {
+        _products = [[NSMutableDictionary alloc] init];
+    }
     for (SKProduct* product in [response products]) {
+        // Keep a product instance for later use with makePurchase
+        [_products setValue: product forKey:product.productIdentifier];
         
         NSMutableDictionary *details = [[NSMutableDictionary alloc] init];
         [numberFormatter setLocale:product.priceLocale];
@@ -139,29 +147,40 @@
     }
 }
 
+// retrive product instance from product identifier
+- (SKProduct*) productIdToProduct:(NSString *)productId {
+    if(!_products)
+        return nil;
+    if([_products objectForKey:productId])
+        return _products[productId];
+    return nil;
+}
+
 // on product info finish
 - (void) requestDidFinish:(SKRequest*)request {
-    [self sendEvent:@"DEBUG" level:@"requestDidFinish"];
+
 }
 
 // on product info error
 - (void)request:(SKRequest*)request didFailWithError:(NSError*)error {
     
-    [self sendEvent:@"DEBUG" level:@"requestDidFailWithError"];
     [self sendEvent:@"PRODUCT_INFO_ERROR" level:[error debugDescription]];
 }
 
 // complete a transaction (item has been purchased, need to check the receipt)
 - (void) completeTransaction:(SKPaymentTransaction*)transaction {
-
     NSMutableDictionary *data;
-
+    NSURL *receiptURL = [[NSBundle mainBundle] appStoreReceiptURL];
+    NSData *receipt = [NSData dataWithContentsOfURL:receiptURL];
+    if(!receipt) {
+        return;
+    }
     // purchase done
     // dispatch event
     data = [[NSMutableDictionary alloc] init];
     [data setValue:[[transaction payment] productIdentifier] forKey:@"productId"];
     
-    NSString* receiptString = [[NSString alloc] initWithData:transaction.transactionReceipt encoding:NSUTF8StringEncoding];
+    NSString* receiptString = [[NSString alloc] initWithData:[receipt base64EncodedDataWithOptions:0] encoding:NSUTF8StringEncoding];
     [data setValue:receiptString forKey:@"receipt"];
     [data setValue:@"AppStore"   forKey:@"receiptType"];
     [data setValue:[NSString stringWithFormat: @"%f", [transaction.transactionDate timeIntervalSince1970]] forKey:@"timestamp"];
@@ -173,7 +192,6 @@
 
 // transaction failed, remove the transaction from the queue.
 - (void) failedTransaction:(SKPaymentTransaction*)transaction {
-    
     // purchase failed
     NSMutableDictionary* data;
 
@@ -220,7 +238,6 @@
 
 // list of transactions has been updated.
 - (void) paymentQueue:(SKPaymentQueue *)queue updatedTransactions:(NSArray*)transactions {
-    
     NSUInteger nbTransaction = [transactions count];
     NSString* pendingTransactionInformation = [NSString stringWithFormat:@"pending transaction - %@", [NSNumber numberWithUnsignedInteger:nbTransaction]];
     [self sendEvent:@"UPDATED_TRANSACTIONS" level:pendingTransactionInformation];
@@ -248,15 +265,12 @@
 }
 
 - (void)paymentQueueRestoreCompletedTransactionsFinished:(SKPaymentQueue*)queue {
-    [self sendEvent:@"DEBUG" level:@"restoreCompletedTransactions"];
 }
 
 - (void)paymentQueue:(SKPaymentQueue *)queue restoreCompletedTransactionsFailedWithError:(NSError *)error {
-    [self sendEvent:@"DEBUG" level:@"restoreFailed"];
 }
 
 - (void)paymentQueue:(SKPaymentQueue *)queue removedTransactions:(NSArray*)transactions {
-    [self sendEvent:@"DEBUG" level:@"removeTransaction"];
 }
 
 @end
@@ -285,13 +299,19 @@ DEFINE_ANE_FUNCTION(makeSubscription) {
     
     if (FREGetObjectAsUTF8(argv[0], &stringLength, &string1) != FRE_OK)
         return nil;
+    AirInAppPurchase* controller = getAirInAppPurchaseContextNativeData(context);
+    if(!controller) {
+        FREDispatchStatusEventAsync(context, (uint8_t*) "DEBUG", (uint8_t*) "CouldNotGetCtrl");
+        return nil;
+    }
     
     NSString *productIdentifier = [NSString stringWithUTF8String:(char*)string1];
-    SKPayment* payment = [SKPayment paymentWithProductIdentifier:productIdentifier];
-    
-    FREDispatchStatusEventAsync(context, (uint8_t*) "DEBUG", (uint8_t*) [productIdentifier UTF8String]);
-    FREDispatchStatusEventAsync(context, (uint8_t*) "DEBUG", (uint8_t*) [[payment productIdentifier] UTF8String]);
-   
+    SKProduct *product = [controller productIdToProduct:productIdentifier];
+    if(!product) {
+        return nil;
+    }
+    SKPayment* payment = [SKPayment paymentWithProduct:product];
+       
     [[SKPaymentQueue defaultQueue] addPayment:payment];
     
     return nil;
@@ -304,13 +324,19 @@ DEFINE_ANE_FUNCTION(makePurchase) {
     
     if (FREGetObjectAsUTF8(argv[0], &stringLength, &string1) != FRE_OK)
         return nil;
+    AirInAppPurchase* controller = getAirInAppPurchaseContextNativeData(context);
+    if(!controller) {
+        FREDispatchStatusEventAsync(context, (uint8_t*) "DEBUG", (uint8_t*) "CouldNotGetCtrl");
+        return nil;
+    }
 
     NSString *productIdentifier = [NSString stringWithUTF8String:(char*)string1];
-    SKPayment* payment = [SKPayment paymentWithProductIdentifier:productIdentifier];
-  
-    FREDispatchStatusEventAsync(context, (uint8_t*) "DEBUG", (uint8_t*) [productIdentifier UTF8String]);
-    FREDispatchStatusEventAsync(context, (uint8_t*) "DEBUG", (uint8_t*) [[payment productIdentifier] UTF8String]);
-    
+    SKProduct *product = [controller productIdToProduct:productIdentifier];
+    if(!product) {
+        return nil;
+    }
+    SKPayment* payment = [SKPayment paymentWithProduct:product];
+      
     [[SKPaymentQueue defaultQueue] addPayment:payment];
     
     return nil;
@@ -373,8 +399,6 @@ DEFINE_ANE_FUNCTION(removePurchaseFromQueue) {
     NSString* productIdentifier = [NSString stringWithUTF8String:(char*)string1];
     NSArray* transactions = [[SKPaymentQueue defaultQueue] transactions];
 
-    FREDispatchStatusEventAsync(context, (uint8_t*) "DEBUG", (uint8_t*) [[NSString stringWithFormat:@"removing purchase from queue %@", productIdentifier] UTF8String]);
-
     for (SKPaymentTransaction* transaction in transactions) {
 
         FREDispatchStatusEventAsync(context, (uint8_t*) "DEBUG", (uint8_t*) [[[transaction payment] productIdentifier] UTF8String]);
@@ -398,7 +422,6 @@ DEFINE_ANE_FUNCTION(removePurchaseFromQueue) {
         if ([transaction transactionState] == SKPaymentTransactionStatePurchased && [[[transaction payment] productIdentifier] isEqualToString:productIdentifier]) {
             
             [[SKPaymentQueue defaultQueue] finishTransaction:transaction];
-            FREDispatchStatusEventAsync(context, (uint8_t*) "DEBUG", (uint8_t*) [@"Conluding transaction" UTF8String]);
             break;
         }
     }

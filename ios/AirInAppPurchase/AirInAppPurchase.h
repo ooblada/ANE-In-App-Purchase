@@ -17,8 +17,10 @@
 #import <StoreKit/StoreKit.h>
 #import "FlashRuntimeExtensions.h"
 
-@interface AirInAppPurchase : NSObject <SKPaymentTransactionObserver, SKProductsRequestDelegate> {
+@interface AirInAppPurchase : NSObject <SKPaymentTransactionObserver, SKProductsRequestDelegate>
+{
     FREContext _context;
+    NSMutableDictionary *_products;
 }
 
 @end

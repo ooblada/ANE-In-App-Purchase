@@ -237,7 +237,7 @@ package com.freshplanet.ane.AirInAppPurchase {
          * @param event
          */
 		private function _onStatus(event:StatusEvent):void {
-
+		trace(event.toString());
             if (event.code == InAppPurchaseEvent.PURCHASE_SUCCESSFUL && _isIOS())
                 _iosPendingPurchases.push(event.level);
 
