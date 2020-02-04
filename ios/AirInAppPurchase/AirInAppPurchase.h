@@ -21,6 +21,7 @@
 {
     FREContext _context;
     NSMutableDictionary *_products;
+    NSMutableArray *_pendingTransactions;
 }
 
 @end

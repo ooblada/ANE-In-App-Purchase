@@ -56,6 +56,55 @@
     return jsonString;
 }
 
+- (void) processStackedTransaction {
+    NSUInteger count = [_pendingTransactions count];
+    if (count > 0) {
+        SKPaymentTransaction* transaction = _pendingTransactions[0];
+        NSLog(@"%@", transaction.payment.productIdentifier);
+        NSLog(@"%@", transaction.originalTransaction);
+        NSLog(@"%@", transaction.transactionDate);
+        NSLog(@"%@", transaction.transactionIdentifier);
+        [self completeTransaction:transaction];
+        [_pendingTransactions removeObjectAtIndex:0];
+    }
+}
+
+- (void) stackTransactionInfo:(SKPaymentTransaction*)transaction {
+    if(!_pendingTransactions) {
+        _pendingTransactions = [[NSMutableArray alloc] init];
+    }
+    if(transaction.transactionState != SKPaymentTransactionStatePurchased &&
+       transaction.transactionState != SKPaymentTransactionStateRestored) {
+        NSLog(@"Attempting to stack a transaction with an invalid state : %ld", transaction.transactionState);
+        return;
+    }
+    NSString * tid = (transaction.transactionState == SKPaymentTransactionStateRestored) ?  transaction.originalTransaction.transactionIdentifier : transaction.transactionIdentifier;
+    
+    for (id obj in _pendingTransactions) {
+        SKPaymentTransaction* t = (SKPaymentTransaction*)obj;
+        NSString * atid = (t.transactionState == SKPaymentTransactionStateRestored) ?  t.originalTransaction.transactionIdentifier : t.transactionIdentifier;
+        if(tid == atid) {
+            NSLog(@"Found a duplicated transaction!");
+            // TODO keep most recent transaction and wait it is validated before attempting to process any dup?
+            return;
+        }
+    }
+    
+    [_pendingTransactions addObject:transaction];
+    //NSUInteger count = [_pendingTransactions count];
+    //NSInteger i = [_pendingTransations indexOfObject:@{}];
+    //for(NSUInteger index = 0; index < count; index++) {
+    
+    //}
+    // Sort transactions by date so index 0 is the more recent and is processed first
+    NSArray * sortedTransactions;
+    sortedTransactions = [_pendingTransactions sortedArrayUsingComparator:^NSComparisonResult(id obj1, id obj2) {
+        NSDate* first = [(SKPaymentTransaction*)obj1 transactionDate];
+        NSDate* second = [(SKPaymentTransaction*)obj2 transactionDate];
+        return [first compare:second];
+    }];
+}
+
 - (void) registerObserver {
     
     [[SKPaymentQueue defaultQueue] addTransactionObserver:self];
@@ -75,17 +124,14 @@
             
             switch (transaction.transactionState) {
                 case SKPaymentTransactionStatePurchased:
-                    NSLog(@"%@", transaction.payment.productIdentifier);
-                    NSLog(@"%@", transaction.originalTransaction);
-                    NSLog(@"%@", transaction.transactionDate);
-                    NSLog(@"%@", transaction.transactionIdentifier);
-                    [self completeTransaction:transaction];
+                    [self stackTransactionInfo:transaction];
                     break;
                 default:
                     [self sendEvent:@"PURCHASE_UNKNOWN" level:@"Unknown Reason"];
                     break;
             }
         }
+        [self processStackedTransaction];
     }
 }
 
@@ -246,7 +292,7 @@
         
         switch (transaction.transactionState) {
             case SKPaymentTransactionStatePurchased:
-                [self completeTransaction:transaction];
+                [self stackTransactionInfo:transaction];
                 break;
             case SKPaymentTransactionStateFailed:
                 [self failedTransaction:transaction];
@@ -262,6 +308,7 @@
                 break;
         }
     }
+    [self processStackedTransaction];
 }
 
 - (void)paymentQueueRestoreCompletedTransactionsFinished:(SKPaymentQueue*)queue {
@@ -354,6 +401,18 @@ DEFINE_ANE_FUNCTION(userCanMakeAPurchase) {
     return nil;
 }
 
+DEFINE_ANE_FUNCTION(fetchOwnedProducts) {
+    
+    AirInAppPurchase* controller = getAirInAppPurchaseContextNativeData(context);
+    if(!controller) {
+        FREDispatchStatusEventAsync(context, (uint8_t*) "DEBUG", (uint8_t*) "CouldNotGetCtrl");
+        return nil;
+    }
+    
+    [controller processStackedTransaction];
+    return nil;
+}
+
 DEFINE_ANE_FUNCTION(getProductsInfo) {
     
     AirInAppPurchase* controller = getAirInAppPurchaseContextNativeData(context);
@@ -437,7 +496,8 @@ void AirInAppPurchaseContextInitializer(void* extData, const uint8_t* ctxType, F
         MAP_FUNCTION(userCanMakeAPurchase, NULL),
         MAP_FUNCTION(getProductsInfo, NULL),
         MAP_FUNCTION(removePurchaseFromQueue, NULL),
-        MAP_FUNCTION(makeSubscription, NULL)
+        MAP_FUNCTION(makeSubscription, NULL),
+        MAP_FUNCTION(fetchOwnedProducts, NULL)
     };
     
     *numFunctionsToTest = sizeof(functions) / sizeof(FRENamedFunction);

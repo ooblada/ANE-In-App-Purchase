@@ -187,7 +187,7 @@ package com.freshplanet.ane.AirInAppPurchase {
 
             if (!isSupported)
                 _dispatchEvent(InAppPurchaseEvent.RESTORE_INFO_ERROR, "InAppPurchase not supported");
-            else if (_isAndroid())
+            else
                 _context.call("fetchOwnedProducts");
         }
 
