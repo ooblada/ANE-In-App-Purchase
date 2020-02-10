@@ -56,14 +56,19 @@
     return jsonString;
 }
 
+-(void) restoreNonConsumableProducts {
+    [[SKPaymentQueue defaultQueue] restoreCompletedTransactions];
+    //NSLog(@"Relaunching restorable products transactions if available...");
+}
+
 - (void) processStackedTransaction {
     NSUInteger count = [_pendingTransactions count];
     if (count > 0) {
         SKPaymentTransaction* transaction = _pendingTransactions[0];
-        NSLog(@"%@", transaction.payment.productIdentifier);
-        NSLog(@"%@", transaction.originalTransaction);
-        NSLog(@"%@", transaction.transactionDate);
-        NSLog(@"%@", transaction.transactionIdentifier);
+        //NSLog(@"%@", transaction.payment.productIdentifier);
+        //NSLog(@"%@", transaction.originalTransaction);
+        //NSLog(@"%@", transaction.transactionDate);
+        //NSLog(@"%@", transaction.transactionIdentifier);
         [self completeTransaction:transaction];
         [_pendingTransactions removeObjectAtIndex:0];
     }
@@ -84,7 +89,7 @@
         SKPaymentTransaction* t = (SKPaymentTransaction*)obj;
         NSString * atid = (t.transactionState == SKPaymentTransactionStateRestored) ?  t.originalTransaction.transactionIdentifier : t.transactionIdentifier;
         if(tid == atid) {
-            NSLog(@"Found a duplicated transaction!");
+            //NSLog(@"Found a duplicated transaction!");
             // TODO keep most recent transaction and wait it is validated before attempting to process any dup?
             return;
         }
@@ -271,10 +276,9 @@
 
 // transaction restored, remove the transaction from the queue.
 - (void) restoreTransaction:(SKPaymentTransaction*)transaction {
-    
     // transaction restored
     // dispatch event
-    [self sendEvent:@"TRANSACTION_RESTORED" level:[[transaction error] localizedDescription]];
+    [self sendEvent:@"TRANSACTION_RESTORED" level:transaction.payment.productIdentifier];
     
     
     // conclude the transaction
@@ -413,6 +417,18 @@ DEFINE_ANE_FUNCTION(fetchOwnedProducts) {
     return nil;
 }
 
+DEFINE_ANE_FUNCTION(fetchRestorableProducts) {
+    AirInAppPurchase* controller = getAirInAppPurchaseContextNativeData(context);
+    if(!controller) {
+        FREDispatchStatusEventAsync(context, (uint8_t*) "DEBUG", (uint8_t*) "CouldNotGetCtrl");
+        return nil;
+    }
+    
+    [controller restoreNonConsumableProducts];
+    return nil;
+}
+
+
 DEFINE_ANE_FUNCTION(getProductsInfo) {
     
     AirInAppPurchase* controller = getAirInAppPurchaseContextNativeData(context);
@@ -497,7 +513,8 @@ void AirInAppPurchaseContextInitializer(void* extData, const uint8_t* ctxType, F
         MAP_FUNCTION(getProductsInfo, NULL),
         MAP_FUNCTION(removePurchaseFromQueue, NULL),
         MAP_FUNCTION(makeSubscription, NULL),
-        MAP_FUNCTION(fetchOwnedProducts, NULL)
+        MAP_FUNCTION(fetchOwnedProducts, NULL),
+        MAP_FUNCTION(fetchRestorableProducts, NULL)
     };
     
     *numFunctionsToTest = sizeof(functions) / sizeof(FRENamedFunction);

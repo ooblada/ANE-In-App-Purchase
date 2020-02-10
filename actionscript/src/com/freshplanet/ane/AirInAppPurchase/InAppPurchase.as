@@ -153,11 +153,7 @@ package com.freshplanet.ane.AirInAppPurchase {
             else if (_isAndroid())
                 _context.call("restoreTransaction");
             else if (_isIOS()) {
-
-                var jsonPurchases:String = "[" + _iosPendingPurchases.join(",") + "]";
-                var jsonData:String = "{ \"purchases\": " + jsonPurchases + "}";
-
-                _dispatchEvent(InAppPurchaseEvent.RESTORE_INFO_RECEIVED, jsonData);
+                _context.call("fetchRestorableProducts");
             }
         }
 
@@ -171,13 +167,9 @@ package com.freshplanet.ane.AirInAppPurchase {
                 _dispatchEvent(InAppPurchaseEvent.RESTORE_INFO_ERROR, "InAppPurchase not supported");
             else if (_isAndroid())
                 _context.call("restoreWithStalledTransactionCheck");
-            else if (_isIOS()) {
-
-                var jsonPurchases:String = "[" + _iosPendingPurchases.join(",") + "]";
-                var jsonData:String = "{ \"purchases\": " + jsonPurchases + "}";
-
-                _dispatchEvent(InAppPurchaseEvent.RESTORE_INFO_RECEIVED, jsonData);
-            }
+            //else if (_isIOS()) {
+	//	trace("restoreWithStalledTransactionCheck - no action to perform on iOS");
+          //  }
         }
 
         /**
@@ -237,7 +229,7 @@ package com.freshplanet.ane.AirInAppPurchase {
          * @param event
          */
 		private function _onStatus(event:StatusEvent):void {
-		trace(event.toString());
+		//trace(event.toString());
             if (event.code == InAppPurchaseEvent.PURCHASE_SUCCESSFUL && _isIOS())
                 _iosPendingPurchases.push(event.level);
 
