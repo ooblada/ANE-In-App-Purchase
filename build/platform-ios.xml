@@ -1,5 +1,5 @@
-<platform xmlns="http://ns.adobe.com/air/extension/22.0">
-    <sdkVersion>12.1</sdkVersion>
+<platform xmlns="http://ns.adobe.com/air/extension/33.1">
+    <sdkVersion>10.3</sdkVersion>
     <linkerOptions> 
         <option>-framework StoreKit</option> 
     </linkerOptions> 
