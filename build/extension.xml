@@ -16,7 +16,7 @@
 //  
 //////////////////////////////////////////////////////////////////////////////////////-->
 
-<extension xmlns="http://ns.adobe.com/air/extension/22.0">
+<extension xmlns="http://ns.adobe.com/air/extension/33.1">
     <id>com.freshplanet.ane.AirInAppPurchase</id>
     <versionNumber>3.0.0</versionNumber>
     <platforms>
@@ -30,6 +30,20 @@
         </platform>
 
         <platform name="Android-ARM"> 
+            <applicationDeployment> 
+                <nativeLibrary>libAirInAppPurchase.jar</nativeLibrary> 
+                <initializer>com.freshplanet.ane.AirInAppPurchase.Extension</initializer> 
+                <finalizer>com.freshplanet.ane.AirInAppPurchase.Extension</finalizer> 
+            </applicationDeployment> 
+        </platform> 
+        <platform name="Android-ARM64"> 
+            <applicationDeployment> 
+                <nativeLibrary>libAirInAppPurchase.jar</nativeLibrary> 
+                <initializer>com.freshplanet.ane.AirInAppPurchase.Extension</initializer> 
+                <finalizer>com.freshplanet.ane.AirInAppPurchase.Extension</finalizer> 
+            </applicationDeployment> 
+        </platform> 
+        <platform name="Android-x86"> 
             <applicationDeployment> 
                 <nativeLibrary>libAirInAppPurchase.jar</nativeLibrary> 
                 <initializer>com.freshplanet.ane.AirInAppPurchase.Extension</initializer> 
